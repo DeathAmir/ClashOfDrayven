@@ -1,0 +1,1 @@
+Optional externally licensed building artwork may be placed here using IDs such as `goldmine.png`, `elixircollector.png`, `barracks.png`, `cannon.png`, `wall.png`, and `townhall.png`. The game always has procedural fallback art.
