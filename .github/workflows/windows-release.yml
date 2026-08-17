@@ -3,6 +3,8 @@ name: Clash Of Drayven Full Client Release
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
