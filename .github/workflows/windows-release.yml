@@ -1,0 +1,73 @@
+name: Windows Build & Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate original icon
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          python scripts/generate_icon.py
+
+      - name: Fetch optional external art
+        if: vars.FETCH_EXTERNAL_ART == 'true'
+        shell: pwsh
+        continue-on-error: true
+        run: ./scripts/fetch_assets.ps1
+
+      - name: Restore
+        run: dotnet restore ClashOfDrayven.csproj
+
+      - name: Publish Windows x64
+        run: dotnet publish ClashOfDrayven.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o dist/ClashOfDrayven-win-x64
+
+      - name: Include notices
+        shell: pwsh
+        run: |
+          Copy-Item README.md dist/ClashOfDrayven-win-x64/README.md -Force
+          Copy-Item THIRD_PARTY_NOTICES.md dist/ClashOfDrayven-win-x64/THIRD_PARTY_NOTICES.md -Force
+          Compress-Archive -Path dist/ClashOfDrayven-win-x64/* -DestinationPath dist/ClashOfDrayven-Windows-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClashOfDrayven-Windows-x64
+          path: dist/ClashOfDrayven-Windows-x64.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: drayven-${{ github.run_number }}
+          name: Clash Of Drayven Build ${{ github.run_number }}
+          body: |
+            Playable Windows MVP of Clash Of Drayven by IrAutoX.
+
+            Includes isometric base building, multi-level upgrades, Gold/Elixir/Gems economy, passive resource production, Barracks-gated recruitable units, premium Gem unit, simple clan creation, IrAutoX splash/UI, persistent local saves, original icon and synthesized sound effects.
+
+            Proprietary font binaries are not redistributed. Add your licensed Supercell-Magic_5.ttf locally before building if desired.
+          files: dist/ClashOfDrayven-Windows-x64.zip
+          fail_on_unmatched_files: true
