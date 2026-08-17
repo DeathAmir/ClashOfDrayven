@@ -6,6 +6,7 @@
         android:label="Clash Of Drayven"
         android:icon="@drawable/drayven_icon"
         android:theme="@style/AppTheme">
+        <meta-data android:name="ir.irautox.clashofdrayven.AUTHOR" android:value="DeathAmir" />
         <activity
             android:name=".MainActivity"
             android:screenOrientation="landscape"
