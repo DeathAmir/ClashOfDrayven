@@ -20,10 +20,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Fetch CC0 game assets and DRY font
+      - name: Fetch reference client open assets and DRY font
         run: python scripts/fetch_assets.py
-
       - name: Restore and build
         shell: pwsh
         run: |
@@ -31,14 +29,12 @@ jobs:
           dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
           dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
           dotnet build ClashOfDrayven.csproj -c Release --no-restore
-
       - name: Create 20 lossless CLDRYPK parts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/packs | Out-Null
           dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
           dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- verify20 dist/packs
-
       - name: Publish Windows game
         shell: pwsh
         run: |
@@ -50,7 +46,6 @@ jobs:
           Copy-Item README.md dist/windows/README.md -Force
           Copy-Item THIRD_PARTY_NOTICES.md dist/windows/THIRD_PARTY_NOTICES.md -Force
           Copy-Item PACK_FORMAT.md dist/windows/PACK_FORMAT.md -Force
-
       - name: UPX hard-compress executable when safe
         continue-on-error: true
         shell: pwsh
@@ -64,7 +59,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { Copy-Item "$exe.before-upx" $exe -Force }
             Remove-Item "$exe.before-upx" -Force -ErrorAction SilentlyContinue
           }
-
       - name: Package Windows downloads
         shell: pwsh
         run: |
@@ -72,7 +66,6 @@ jobs:
           Compress-Archive -Path dist/windows/* -DestinationPath dist/ClashOfDrayven-Windows.zip -CompressionLevel Optimal -Force
           $seven = 'C:\Program Files\7-Zip\7z.exe'
           & $seven a -t7z -mx=9 -m0=lzma2 -md=64m -mfb=273 dist/ClashOfDrayven-Windows-Ultra.7z .\dist\windows\*
-
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release
@@ -93,7 +86,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -101,10 +94,8 @@ jobs:
         with:
           gradle-version: '8.9'
       - uses: android-actions/setup-android@v3
-
       - name: Install Android SDK/NDK
         run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-
       - name: Fetch assets and create same 20 packs
         run: |
           python scripts/fetch_assets.py
@@ -113,8 +104,7 @@ jobs:
           mkdir -p dist/packs
           dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
           python scripts/prepare_android_assets.py
-
-      - name: Prepare valid APK signing key
+      - name: Prepare DeathAmir APK signing key
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -122,31 +112,32 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "SIGNING_MODE=persistent-github-secret" >> "$GITHUB_ENV"
             echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/release.jks"
             echo "DRY_STORE_PASSWORD=${ANDROID_STORE_PASSWORD}" >> "$GITHUB_ENV"
             echo "DRY_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}" >> "$GITHUB_ENV"
-            echo "DRY_KEY_ALIAS=${ANDROID_KEY_ALIAS}" >> "$GITHUB_ENV"
+            echo "DRY_KEY_ALIAS=${ANDROID_KEY_ALIAS:-deathamir}" >> "$GITHUB_ENV"
           else
-            keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/android/release.jks" -storepass drayven-ci-2026 -alias drayven -keypass drayven-ci-2026 -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Clash Of Drayven, OU=IrAutoX, O=IrAutoX, L=Kermanshah, C=IR"
+            echo "SIGNING_MODE=ci-fallback-not-update-stable" >> "$GITHUB_ENV"
+            keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/android/release.jks" -storepass drayven-ci-2026 -alias deathamir -keypass drayven-ci-2026 -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=DeathAmir, OU=Clash Of Drayven, O=IrAutoX, L=Kermanshah, C=IR"
             echo "DRY_STORE_PASSWORD=drayven-ci-2026" >> "$GITHUB_ENV"
             echo "DRY_KEY_PASSWORD=drayven-ci-2026" >> "$GITHUB_ENV"
-            echo "DRY_KEY_ALIAS=drayven" >> "$GITHUB_ENV"
+            echo "DRY_KEY_ALIAS=deathamir" >> "$GITHUB_ENV"
           fi
           echo "DRY_KEYSTORE=$GITHUB_WORKSPACE/android/release.jks" >> "$GITHUB_ENV"
-
       - name: Build signed release APK
         run: gradle -p android --no-daemon :app:assembleRelease
-
-      - name: Verify signature and native library
+      - name: Verify signature package and native library
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
+          echo "Signing mode: $SIGNING_MODE"
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs "$APK"
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "package: name='ir.irautox.clashofdrayven'"
           unzip -l "$APK" | grep 'libclashofdrayven.so'
           mkdir -p dist/native
           unzip -j "$APK" 'lib/arm64-v8a/libclashofdrayven.so' -d dist/native
           cp "$APK" dist/ClashOfDrayven-Android-signed.apk
           cp dist/native/libclashofdrayven.so dist/libclashofdrayven-arm64-v8a.so
-
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
@@ -171,16 +162,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: drayven-${{ github.run_number }}
-          name: Clash Of Drayven Full Build ${{ github.run_number }}
+          name: Clash Of Drayven Reference Client Build ${{ github.run_number }}
           body: |
-            Full Clash Of Drayven client build.
+            Clash Of Drayven by DeathAmir.
 
-            Windows: online login/register, server-synced village state, asset-driven HUD/buildings/troops, build/upgrade economy, army recruiting, raids, clans, DRY font, splash, app icon, 20 CLDRYPK runtime packs, SHA-256 validation and UPX attempt with validation/fallback.
-
-            Android: signed installable APK, the same 20 runtime packs, login/register/state sync, village/shop/army/raid/clan/profile UI and native libclashofdrayven.so loaded by the app. If repository signing secrets are configured they are used; otherwise CI creates a valid installable fallback key for this build.
-
+            Android package: ir.irautox.clashofdrayven
             Server endpoint: http://irautox.ir:8456
-            Runtime art is sourced from the CC0 subtree used by the open clone asset pipeline. DRY.ttf is Lilita One under SIL OFL 1.1.
+
+            Mobile overhaul follows the interaction structure of developers-hub-org/clash-of-clans-clone: deterministic reference-client CC0 asset mapping, authenticated player name, redesigned login/register and HUD, troop-card selection, tap-to-deploy attacks, troop consumption, live building HP, battle timer, destruction percentage, stars and loot.
+
+            The build contains 20 verified CLDRYPK runtime packs and libclashofdrayven.so. Persistent Android update signing is automatically used when repository signing secrets are configured; otherwise CI uses a valid DeathAmir fallback certificate for install/test builds without exposing a private key in this public repository.
           files: |
             release-files/ClashOfDrayven-Windows.exe
             release-files/ClashOfDrayven-Windows.zip
