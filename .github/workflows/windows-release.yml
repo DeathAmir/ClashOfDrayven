@@ -1,4 +1,4 @@
-name: Windows .NET Framework 4.8 Build & Release
+name: Clash Of Drayven Full Client Release
 
 on:
   push:
@@ -9,94 +9,182 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
+  windows:
+    name: Windows net48 + CLDRYPK20
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Fetch licensed assets and font
-        shell: pwsh
-        run: ./scripts/fetch_assets.ps1
+      - name: Fetch CC0 game assets and DRY font
+        run: python scripts/fetch_assets.py
 
-      - name: Restore
+      - name: Restore and build
         shell: pwsh
         run: |
           dotnet restore ClashOfDrayven.csproj
           dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
-
-      - name: Build .NET Framework 4.8
-        shell: pwsh
-        run: |
-          dotnet build ClashOfDrayven.csproj -c Release --no-restore
           dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
+          dotnet build ClashOfDrayven.csproj -c Release --no-restore
 
-      - name: Package game and CLDRYPK assets
+      - name: Create 20 lossless CLDRYPK parts
         shell: pwsh
         run: |
-          $out = 'dist/ClashOfDrayven-net48'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item 'bin/Release/net48/*' $out -Recurse -Force
-          New-Item -ItemType Directory -Force -Path "$out/Assets" | Out-Null
-          $packer = 'Tools/ClDryPacker/bin/Release/net48/cldrypk.exe'
-          & $packer pack 'build-assets/ClientAssets' "$out/Assets/GameAssets.cldrypk"
-          New-Item -ItemType Directory -Force -Path "$out/Tools" | Out-Null
-          Copy-Item $packer "$out/Tools/cldrypk.exe" -Force
-          Copy-Item 'PACK_FORMAT.md' "$out/Tools/PACK_FORMAT.md" -Force
-          Copy-Item 'README.md' "$out/README.md" -Force
-          Copy-Item 'THIRD_PARTY_NOTICES.md' "$out/THIRD_PARTY_NOTICES.md" -Force
-          Copy-Item 'build-assets/LICENSE-developers-hub.txt' "$out/LICENSE-developers-hub.txt" -Force
-          Get-ChildItem $out -Recurse -File | Sort-Object Length -Descending | Select-Object -First 15 FullName,Length | Format-Table -AutoSize
+          New-Item -ItemType Directory -Force -Path dist/packs | Out-Null
+          dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
+          dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- verify20 dist/packs
 
-      - name: Try UPX best LZMA
+      - name: Publish Windows game
+        shell: pwsh
+        run: |
+          dotnet publish ClashOfDrayven.csproj -c Release --no-restore -o dist/windows
+          New-Item -ItemType Directory -Force -Path dist/windows/Assets/Fonts | Out-Null
+          Copy-Item dist/packs/CLDRYPK* dist/windows/Assets/ -Force
+          Copy-Item build-assets/PackSource/Fonts/DRY.ttf dist/windows/Assets/Fonts/DRY.ttf -Force
+          Copy-Item build-assets/PackSource/Fonts/OFL-DRY.txt dist/windows/Assets/Fonts/OFL-DRY.txt -Force
+          Copy-Item README.md dist/windows/README.md -Force
+          Copy-Item THIRD_PARTY_NOTICES.md dist/windows/THIRD_PARTY_NOTICES.md -Force
+          Copy-Item PACK_FORMAT.md dist/windows/PACK_FORMAT.md -Force
+
+      - name: UPX hard-compress executable when safe
         continue-on-error: true
         shell: pwsh
         run: |
           choco install upx -y --no-progress
-          $targets = @('dist/ClashOfDrayven-net48/ClashOfDrayven.exe','dist/ClashOfDrayven-net48/Tools/cldrypk.exe')
-          foreach ($target in $targets) {
-            if (Test-Path $target) {
-              & upx --best --lzma $target
-              if ($LASTEXITCODE -ne 0) { Write-Warning "UPX skipped managed binary: $target"; $global:LASTEXITCODE = 0 }
-            }
+          $exe = 'dist/windows/ClashOfDrayven.exe'
+          if (Test-Path $exe) {
+            Copy-Item $exe "$exe.before-upx" -Force
+            & upx --best --lzma $exe
+            if ($LASTEXITCODE -eq 0) { & upx -t $exe }
+            if ($LASTEXITCODE -ne 0) { Copy-Item "$exe.before-upx" $exe -Force }
+            Remove-Item "$exe.before-upx" -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Create compressed downloads
+      - name: Package Windows downloads
         shell: pwsh
         run: |
-          Compress-Archive -Path 'dist/ClashOfDrayven-net48/*' -DestinationPath 'dist/ClashOfDrayven-Windows-net48.zip' -CompressionLevel Optimal -Force
+          Copy-Item dist/windows/ClashOfDrayven.exe dist/ClashOfDrayven-Windows.exe -Force
+          Compress-Archive -Path dist/windows/* -DestinationPath dist/ClashOfDrayven-Windows.zip -CompressionLevel Optimal -Force
           $seven = 'C:\Program Files\7-Zip\7z.exe'
-          if (-not (Test-Path $seven)) { $seven = (Get-Command 7z.exe).Source }
-          & $seven a -t7z -mx=9 -m0=lzma2 -md=64m -mfb=273 'dist/ClashOfDrayven-Windows-net48-ultra.7z' '.\dist\ClashOfDrayven-net48\*'
-          Get-Item 'dist/ClashOfDrayven-Windows-net48.zip','dist/ClashOfDrayven-Windows-net48-ultra.7z' | Select-Object Name,Length | Format-Table -AutoSize
+          & $seven a -t7z -mx=9 -m0=lzma2 -md=64m -mfb=273 dist/ClashOfDrayven-Windows-Ultra.7z .\dist\windows\*
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: ClashOfDrayven-Windows-net48
+          name: windows-release
           path: |
-            dist/ClashOfDrayven-Windows-net48.zip
-            dist/ClashOfDrayven-Windows-net48-ultra.7z
+            dist/ClashOfDrayven-Windows.exe
+            dist/ClashOfDrayven-Windows.zip
+            dist/ClashOfDrayven-Windows-Ultra.7z
           if-no-files-found: error
 
-      - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main'
+  android:
+    name: Android signed APK + native SO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK/NDK
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Fetch assets and create same 20 packs
+        run: |
+          python scripts/fetch_assets.py
+          dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
+          dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
+          mkdir -p dist/packs
+          dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
+          python scripts/prepare_android_assets.py
+
+      - name: Prepare valid APK signing key
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/release.jks"
+            echo "DRY_STORE_PASSWORD=${ANDROID_STORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo "DRY_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}" >> "$GITHUB_ENV"
+            echo "DRY_KEY_ALIAS=${ANDROID_KEY_ALIAS}" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/android/release.jks" -storepass drayven-ci-2026 -alias drayven -keypass drayven-ci-2026 -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Clash Of Drayven, OU=IrAutoX, O=IrAutoX, L=Kermanshah, C=IR"
+            echo "DRY_STORE_PASSWORD=drayven-ci-2026" >> "$GITHUB_ENV"
+            echo "DRY_KEY_PASSWORD=drayven-ci-2026" >> "$GITHUB_ENV"
+            echo "DRY_KEY_ALIAS=drayven" >> "$GITHUB_ENV"
+          fi
+          echo "DRY_KEYSTORE=$GITHUB_WORKSPACE/android/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        run: gradle -p android --no-daemon :app:assembleRelease
+
+      - name: Verify signature and native library
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs "$APK"
+          unzip -l "$APK" | grep 'libclashofdrayven.so'
+          mkdir -p dist/native
+          unzip -j "$APK" 'lib/arm64-v8a/libclashofdrayven.so' -d dist/native
+          cp "$APK" dist/ClashOfDrayven-Android-signed.apk
+          cp dist/native/libclashofdrayven.so dist/libclashofdrayven-arm64-v8a.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: |
+            dist/ClashOfDrayven-Android-signed.apk
+            dist/libclashofdrayven-arm64-v8a.so
+          if-no-files-found: error
+
+  release:
+    name: Publish public GitHub Release
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: List release payload
+        run: find release-files -maxdepth 2 -type f -printf '%p %s bytes\n'
+      - name: Create public release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: drayven-${{ github.run_number }}
-          name: Clash Of Drayven Build ${{ github.run_number }} - net48
+          name: Clash Of Drayven Full Build ${{ github.run_number }}
           body: |
-            Clash Of Drayven Windows build migrated to .NET Framework 4.8.
+            Full Clash Of Drayven client build.
 
-            Includes the Elf logo game icon, Supercell-Magic_5 font supplied under the project owner's license, complete MIT-licensed developers-hub-org/clash-of-clans-clone Client/Assets packed losslessly into GameAssets.cldrypk, selected runtime building textures, CLDRYPK pack/unpack tool, base building, upgrades, economy, recruitable units and simple clans.
+            Windows: online login/register, server-synced village state, asset-driven HUD/buildings/troops, build/upgrade economy, army recruiting, raids, clans, DRY font, splash, app icon, 20 CLDRYPK runtime packs, SHA-256 validation and UPX attempt with validation/fallback.
 
-            ZIP is the convenient download. The 7z file uses Ultra LZMA2 for the smallest release size. UPX is attempted with --best --lzma when the managed PE format is supported.
+            Android: signed installable APK, the same 20 runtime packs, login/register/state sync, village/shop/army/raid/clan/profile UI and native libclashofdrayven.so loaded by the app. If repository signing secrets are configured they are used; otherwise CI creates a valid installable fallback key for this build.
+
+            Server endpoint: http://irautox.ir:8456
+            Runtime art is sourced from the CC0 subtree used by the open clone asset pipeline. DRY.ttf is Lilita One under SIL OFL 1.1.
           files: |
-            dist/ClashOfDrayven-Windows-net48.zip
-            dist/ClashOfDrayven-Windows-net48-ultra.7z
+            release-files/ClashOfDrayven-Windows.exe
+            release-files/ClashOfDrayven-Windows.zip
+            release-files/ClashOfDrayven-Windows-Ultra.7z
+            release-files/ClashOfDrayven-Android-signed.apk
+            release-files/libclashofdrayven-arm64-v8a.so
           fail_on_unmatched_files: true
