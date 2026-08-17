@@ -1,4 +1,4 @@
-name: Windows Build & Release
+name: Windows .NET Framework 4.8 Build & Release
 
 on:
   push:
@@ -15,46 +15,73 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Generate original icon
+      - name: Fetch licensed assets and font
         shell: pwsh
-        run: |
-          python -m pip install --disable-pip-version-check pillow
-          python scripts/generate_icon.py
-
-      - name: Fetch optional external art
-        if: vars.FETCH_EXTERNAL_ART == 'true'
-        shell: pwsh
-        continue-on-error: true
         run: ./scripts/fetch_assets.ps1
 
       - name: Restore
-        run: dotnet restore ClashOfDrayven.csproj
-
-      - name: Publish Windows x64
-        run: dotnet publish ClashOfDrayven.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o dist/ClashOfDrayven-win-x64
-
-      - name: Include notices
         shell: pwsh
         run: |
-          Copy-Item README.md dist/ClashOfDrayven-win-x64/README.md -Force
-          Copy-Item THIRD_PARTY_NOTICES.md dist/ClashOfDrayven-win-x64/THIRD_PARTY_NOTICES.md -Force
-          Compress-Archive -Path dist/ClashOfDrayven-win-x64/* -DestinationPath dist/ClashOfDrayven-Windows-x64.zip -Force
+          dotnet restore ClashOfDrayven.csproj
+          dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
 
-      - name: Upload artifact
+      - name: Build .NET Framework 4.8
+        shell: pwsh
+        run: |
+          dotnet build ClashOfDrayven.csproj -c Release --no-restore
+          dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
+
+      - name: Package game and CLDRYPK assets
+        shell: pwsh
+        run: |
+          $out = 'dist/ClashOfDrayven-net48'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item 'bin/Release/net48/*' $out -Recurse -Force
+          New-Item -ItemType Directory -Force -Path "$out/Assets" | Out-Null
+          $packer = 'Tools/ClDryPacker/bin/Release/net48/cldrypk.exe'
+          & $packer pack 'build-assets/ClientAssets' "$out/Assets/GameAssets.cldrypk"
+          New-Item -ItemType Directory -Force -Path "$out/Tools" | Out-Null
+          Copy-Item $packer "$out/Tools/cldrypk.exe" -Force
+          Copy-Item 'PACK_FORMAT.md' "$out/Tools/PACK_FORMAT.md" -Force
+          Copy-Item 'README.md' "$out/README.md" -Force
+          Copy-Item 'THIRD_PARTY_NOTICES.md' "$out/THIRD_PARTY_NOTICES.md" -Force
+          Copy-Item 'build-assets/LICENSE-developers-hub.txt' "$out/LICENSE-developers-hub.txt" -Force
+          Get-ChildItem $out -Recurse -File | Sort-Object Length -Descending | Select-Object -First 15 FullName,Length | Format-Table -AutoSize
+
+      - name: Try UPX best LZMA
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          choco install upx -y --no-progress
+          $targets = @('dist/ClashOfDrayven-net48/ClashOfDrayven.exe','dist/ClashOfDrayven-net48/Tools/cldrypk.exe')
+          foreach ($target in $targets) {
+            if (Test-Path $target) {
+              & upx --best --lzma $target
+              if ($LASTEXITCODE -ne 0) { Write-Warning "UPX skipped managed binary: $target"; $global:LASTEXITCODE = 0 }
+            }
+          }
+
+      - name: Create compressed downloads
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'dist/ClashOfDrayven-net48/*' -DestinationPath 'dist/ClashOfDrayven-Windows-net48.zip' -CompressionLevel Optimal -Force
+          $seven = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $seven)) { $seven = (Get-Command 7z.exe).Source }
+          & $seven a -t7z -mx=9 -m0=lzma2 -md=64m -mfb=273 'dist/ClashOfDrayven-Windows-net48-ultra.7z' '.\dist\ClashOfDrayven-net48\*'
+          Get-Item 'dist/ClashOfDrayven-Windows-net48.zip','dist/ClashOfDrayven-Windows-net48-ultra.7z' | Select-Object Name,Length | Format-Table -AutoSize
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ClashOfDrayven-Windows-x64
-          path: dist/ClashOfDrayven-Windows-x64.zip
+          name: ClashOfDrayven-Windows-net48
+          path: |
+            dist/ClashOfDrayven-Windows-net48.zip
+            dist/ClashOfDrayven-Windows-net48-ultra.7z
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -62,12 +89,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: drayven-${{ github.run_number }}
-          name: Clash Of Drayven Build ${{ github.run_number }}
+          name: Clash Of Drayven Build ${{ github.run_number }} - net48
           body: |
-            Playable Windows MVP of Clash Of Drayven by IrAutoX.
+            Clash Of Drayven Windows build migrated to .NET Framework 4.8.
 
-            Includes isometric base building, multi-level upgrades, Gold/Elixir/Gems economy, passive resource production, Barracks-gated recruitable units, premium Gem unit, simple clan creation, IrAutoX splash/UI, persistent local saves, original icon and synthesized sound effects.
+            Includes the Elf logo game icon, Supercell-Magic_5 font supplied under the project owner's license, complete MIT-licensed developers-hub-org/clash-of-clans-clone Client/Assets packed losslessly into GameAssets.cldrypk, selected runtime building textures, CLDRYPK pack/unpack tool, base building, upgrades, economy, recruitable units and simple clans.
 
-            Proprietary font binaries are not redistributed. Add your licensed Supercell-Magic_5.ttf locally before building if desired.
-          files: dist/ClashOfDrayven-Windows-x64.zip
+            ZIP is the convenient download. The 7z file uses Ultra LZMA2 for the smallest release size. UPX is attempted with --best --lzma when the managed PE format is supported.
+          files: |
+            dist/ClashOfDrayven-Windows-net48.zip
+            dist/ClashOfDrayven-Windows-net48-ultra.7z
           fail_on_unmatched_files: true

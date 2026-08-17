@@ -1,17 +1,23 @@
 # Third-party notices
 
-## Optional developers-hub-org / clash-of-clans-clone assets
+## developers-hub-org / clash-of-clans-clone assets
 
-The project owner requested compatibility with artwork located in `Client/Assets` of `developers-hub-org/clash-of-clans-clone`. The upstream repository declares an MIT license (Copyright (c) 2022 developers-hub.com), but this project does **not** independently assert provenance or redistribution rights for every individual image in that asset tree.
+Release builds fetch `Client/Assets` from `developers-hub-org/clash-of-clans-clone` and preserve its upstream MIT license in the release. The upstream repository currently declares the MIT License, Copyright (c) 2023 Developers Hub.
 
-For that reason, the public release workflow does **not** fetch those images by default. If the project owner has independently confirmed rights, repository variable `FETCH_EXTERNAL_ART=true` enables `scripts/fetch_assets.ps1`. When enabled, the upstream MIT license is copied to `Assets/External/LICENSE-developers-hub.txt`.
+The complete fetched `Client/Assets` tree is stored losslessly in `Assets/GameAssets.cldrypk`. A small selected subset of building textures is also copied loose into `Assets/External` so the current WinForms MVP can render those images directly.
 
-Clash Of Drayven never depends on those files and includes original procedural fallback artwork.
+Source: https://github.com/developers-hub-org/clash-of-clans-clone
 
 ## Supercell Magic font
 
-`Supercell-Magic_5.ttf` is **not redistributed by this repository or release workflow**. The application automatically uses a user-supplied licensed copy placed at `Assets/Fonts/Supercell-Magic_5.ttf`; otherwise it uses a Windows fallback font.
+The build downloads `Supercell-Magic_5.ttf` from the source URL supplied by the project owner. The project owner states that they hold the required license/permission for this use and redistribution. This font is not covered by the MIT license above.
+
+Source supplied by project owner: https://github.com/YunYouJun/coc/blob/master/assets/fonts/Supercell-Magic_5.ttf
+
+## Clash Of Drayven Elf logo
+
+The Elf mascot/logo and Windows icon used by this project were generated specifically for Clash Of Drayven and are not copied from the official Clash of Clans logo or character art.
 
 ## Audio
 
-The MVP sound effects are generated locally from original synthesized waveforms. No Clash of Clans / Supercell audio is included.
+The MVP sound effects are generated locally from original synthesized waveforms. No Clash of Clans / Supercell audio files are included.

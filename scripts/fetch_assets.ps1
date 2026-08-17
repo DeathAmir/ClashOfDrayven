@@ -1,18 +1,25 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$out = Join-Path $root 'Assets\External'
-New-Item -ItemType Directory -Force -Path $out | Out-Null
+$runtimeOut = Join-Path $root 'Assets\External'
+$fontOut = Join-Path $root 'Assets\Fonts'
+$buildOut = Join-Path $root 'build-assets'
+$fullAssets = Join-Path $buildOut 'ClientAssets'
 
-# Optional enhancement assets from the clone repository requested by the project owner.
-# Enable only after independently confirming redistribution rights for the selected images.
-# The game never depends on these files; procedural fallback art is always available.
+Remove-Item $runtimeOut -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $buildOut -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $runtimeOut,$fontOut,$fullAssets | Out-Null
+
 $temp = Join-Path $env:TEMP ('drayven-assets-' + [guid]::NewGuid().ToString('N'))
 try {
-    git clone --depth 1 --filter=blob:none https://github.com/developers-hub-org/clash-of-clans-clone.git $temp
+    git clone --depth 1 https://github.com/developers-hub-org/clash-of-clans-clone.git $temp
     $assetRoot = Join-Path $temp 'Client\Assets'
     if (-not (Test-Path $assetRoot)) { throw 'Client/Assets was not found.' }
 
-    $files = Get-ChildItem $assetRoot -Recurse -File | Where-Object { $_.Extension -match '^\.(png|jpg|jpeg)$' }
+    Copy-Item (Join-Path $assetRoot '*') $fullAssets -Recurse -Force
+    Copy-Item (Join-Path $temp 'LICENSE') (Join-Path $buildOut 'LICENSE-developers-hub.txt') -Force
+    Copy-Item (Join-Path $temp 'LICENSE') (Join-Path $runtimeOut 'LICENSE-developers-hub.txt') -Force
+
+    $images = Get-ChildItem $assetRoot -Recurse -File | Where-Object { $_.Extension -match '^\.(png|jpg|jpeg)$' }
     $map = [ordered]@{
         townhall = 'town.?hall|townhall|headquarter'
         goldmine = 'gold.*mine|mine.*gold'
@@ -21,23 +28,20 @@ try {
         cannon = 'cannon'
         wall = '(^|[^a-z])wall([^a-z]|$)|wall_'
     }
-
     foreach ($key in $map.Keys) {
-        $match = $files | Where-Object { $_.BaseName -match $map[$key] -or $_.FullName -match $map[$key] } | Sort-Object Length | Select-Object -First 1
+        $match = $images | Where-Object { $_.BaseName -match $map[$key] -or $_.FullName -match $map[$key] } | Sort-Object Length | Select-Object -First 1
         if ($null -ne $match) {
-            $dest = Join-Path $out ($key + $match.Extension.ToLowerInvariant())
-            Copy-Item $match.FullName $dest -Force
-            Write-Host "Asset $key <= $($match.FullName)"
-        } else {
-            Write-Host "No external asset match for $key; procedural fallback will be used."
+            Copy-Item $match.FullName (Join-Path $runtimeOut ($key + $match.Extension.ToLowerInvariant())) -Force
+            Write-Host "Runtime texture $key <= $($match.FullName)"
         }
     }
 
-    Copy-Item (Join-Path $temp 'LICENSE') (Join-Path $out 'LICENSE-developers-hub.txt') -Force
-}
-catch {
-    Write-Warning "Optional external art fetch failed: $($_.Exception.Message)"
-    Write-Warning 'Continuing with original procedural art.'
+    $fontUrl = 'https://raw.githubusercontent.com/YunYouJun/coc/master/assets/fonts/Supercell-Magic_5.ttf'
+    Invoke-WebRequest -Uri $fontUrl -OutFile (Join-Path $fontOut 'Supercell-Magic_5.ttf') -UseBasicParsing
+
+    $count = (Get-ChildItem $fullAssets -Recurse -File).Count
+    $bytes = (Get-ChildItem $fullAssets -Recurse -File | Measure-Object Length -Sum).Sum
+    Write-Host ("Full MIT asset tree ready: {0:N0} files / {1:N0} bytes" -f $count,$bytes)
 }
 finally {
     if (Test-Path $temp) { Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue }
