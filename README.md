@@ -1,53 +1,47 @@
 # Clash Of Drayven
 
-A lightweight, engine-free C# strategy/base-building MVP by IrAutoX. It is inspired by the readability and progression loop of mobile village builders, while using its own code, UI, procedural art fallback and synthesized audio.
+An online 2D/isometric base-builder and raid game client for Windows and Android.
 
-## Current playable systems
+## Full client build
 
-- IrAutoX splash screen
-- 20x20 isometric village grid
-- persistent Gold, Elixir and Gems
-- build placement with Gold/Elixir costs
-- Gold Mine and Elixir Pump passive production
-- building selection and multi-level upgrades
-- Barracks-gated unit recruitment
-- three Elixir units plus a premium Gem unit
-- local save file under `%LOCALAPPDATA%/IrAutoX/ClashOfDrayven/save.json`
-- simple clan creation (name + tag + 1,000 Gold fee)
-- original generated UI/build/coin sound effects
-- optional external texture loader with procedural fallback
-- Windows x64 automated release build
+The current client includes:
 
-## Controls
+- required account registration/login against `http://irautox.ir:8456`
+- server-restored Gold, Elixir, Gems, XP, level, buildings, army and clan state
+- default new-account economy: 7,000 Gold / 7,000 Elixir / 250 Gems
+- asset-driven isometric village renderer
+- build shop, placement, upgrades and passive production
+- Gold/Elixir storages, Barracks, Army Camp, Cannon, Archer Tower, Mortar, Air Defense, Wall and Clan Keep
+- eight recruitable troop classes and raid gameplay
+- clan creation stored by the server
+- profile/logout/server-sync flow
+- DRY.ttf runtime font and custom splash screen
+- app icon embedded in the Windows executable and Android launcher
+- exactly 20 SHA-256-verified runtime asset packs: `CLDRYPK1` ... `CLDRYPK20`
+- Windows UPX `--best --lzma` attempt with verification and automatic fallback
+- Android native `libclashofdrayven.so`, loaded at startup
+- Android R8 release minification and symbol-stripped native build
 
-- Click a building card at the bottom, then click an empty village tile to build.
-- Click an existing building to select it, then use **UPGRADE** on the right.
-- With no building selected, the right side shows recruitable army units.
-- Use **CREATE CLAN** to found a local clan.
-- Press **Esc** to cancel build mode / selection.
+## Server
 
-## Licensed Supercell Magic font
+The production endpoint expected by both clients is:
 
-The binary font is not stored in this repository. If you own a valid license, place:
-
-`Assets/Fonts/Supercell-Magic_5.ttf`
-
-before building. The splash and all UI automatically use it. Without it, the game remains buildable and uses a Windows fallback font.
-
-## Build locally
-
-Requires .NET 8 SDK on Windows:
-
-```powershell
-python -m pip install pillow
-python scripts/generate_icon.py
-# Optional only after confirming rights to the upstream images:
-# powershell -ExecutionPolicy Bypass -File scripts/fetch_assets.ps1
-dotnet publish -c Release -r win-x64 --self-contained true -o dist/ClashOfDrayven-win-x64
+```text
+http://irautox.ir:8456
 ```
 
-## Art policy
+The Python server is deliberately not stored in this repository. It is deployed separately so database/authentication implementation can be managed independently from public client code.
 
-The game never requires third-party textures. `scripts/fetch_assets.ps1` can optionally pull matching art from the repository requested by the project owner, but GitHub Actions leaves this disabled by default because a repository-level license does not independently prove provenance of every image. Set repository variable `FETCH_EXTERNAL_ART=true` only after confirming you have the needed rights. If external art is unavailable, the renderer uses original procedural art instead.
+## Asset pipeline
 
-This project is not affiliated with or endorsed by Supercell.
+`scripts/fetch_assets.py` downloads only the open runtime source used by the build, copies the CC0 sprite subtree, downloads Lilita One under SIL OFL and renames it to `DRY.ttf`. `cldrypk pack20` then balances the asset tree across twenty lossless packs. Both clients unpack and validate those files at runtime.
+
+See `THIRD_PARTY_NOTICES.md` and `PACK_FORMAT.md`.
+
+## Android signing
+
+If `ANDROID_KEYSTORE_B64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD` and `ANDROID_KEY_ALIAS` repository secrets exist, the release workflow uses that stable key. Otherwise CI generates a valid installable fallback key for that workflow run. Keep a stable private keystore configured for production updates.
+
+## Reverse engineering
+
+The release uses asset packing/integrity verification, R8 on Android, stripped native symbols and UPX where safe. No client application can be made literally impossible to reverse engineer; server secrets and database credentials therefore never belong in the client.
