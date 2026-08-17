@@ -1,0 +1,9 @@
+bin/
+obj/
+dist/
+.vs/
+*.user
+Assets/Fonts/Supercell-Magic_5.ttf
+Assets/External/*
+!Assets/External/README.md
+!Assets/External/LICENSE-*.txt
