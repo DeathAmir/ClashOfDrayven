@@ -8,6 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ClashOfDrayven</AssemblyName>
     <RootNamespace>ClashOfDrayven</RootNamespace>
+    <StartupObject>ClashOfDrayven.OnlineProgram</StartupObject>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
@@ -15,9 +16,11 @@
     <DebugSymbols>false</DebugSymbols>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Security" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
