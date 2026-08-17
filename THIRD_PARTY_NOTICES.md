@@ -1,23 +1,13 @@
 # Third-party notices
 
-## developers-hub-org / clash-of-clans-clone assets
+## Open game art
 
-Release builds fetch `Client/Assets` from `developers-hub-org/clash-of-clans-clone` and preserve its upstream MIT license in the release. The upstream repository currently declares the MIT License, Copyright (c) 2023 Developers Hub.
+The release asset-fetch step copies the `Client/Assets/Sprites/CC0` subtree from `developers-hub-org/clash-of-clans-clone`. Clash Of Drayven intentionally does not fetch or redistribute proprietary Supercell game binaries or scrape assets from a commercial APK. The upstream repository/license notice is preserved inside the packed asset tree and in build metadata.
 
-The complete fetched `Client/Assets` tree is stored losslessly in `Assets/GameAssets.cldrypk`. A small selected subset of building textures is also copied loose into `Assets/External` so the current WinForms MVP can render those images directly.
+## DRY font
 
-Source: https://github.com/developers-hub-org/clash-of-clans-clone
+`DRY.ttf` is the project runtime name for **Lilita One Regular** fetched from the Google Fonts repository. Lilita One is distributed under the SIL Open Font License 1.1. `OFL-DRY.txt` is packaged beside the font.
 
-## Supercell Magic font
+## Product/trademark note
 
-The build downloads `Supercell-Magic_5.ttf` from the source URL supplied by the project owner. The project owner states that they hold the required license/permission for this use and redistribution. This font is not covered by the MIT license above.
-
-Source supplied by project owner: https://github.com/YunYouJun/coc/blob/master/assets/fonts/Supercell-Magic_5.ttf
-
-## Clash Of Drayven Elf logo
-
-The Elf mascot/logo and Windows icon used by this project were generated specifically for Clash Of Drayven and are not copied from the official Clash of Clans logo or character art.
-
-## Audio
-
-The MVP sound effects are generated locally from original synthesized waveforms. No Clash of Clans / Supercell audio files are included.
+Clash Of Drayven is an independent open-source project and is not affiliated with, sponsored by, or endorsed by Supercell. Screenshots of other games may be used only as UI/layout references during development and are not shipped by this repository.

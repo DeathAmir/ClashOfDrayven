@@ -1,0 +1,3 @@
+-keep class ir.irautox.clashofdrayven.MainActivity { *; }
+-keepclasseswithmembernames class * { native <methods>; }
+-assumenosideeffects class android.util.Log { public static *** d(...); public static *** v(...); }

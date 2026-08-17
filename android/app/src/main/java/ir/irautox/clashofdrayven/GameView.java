@@ -1,0 +1,35 @@
+package ir.irautox.clashofdrayven;
+
+import android.content.Context;
+import android.graphics.*;
+import android.view.*;
+import java.io.File;
+import java.util.*;
+
+final class GameView extends View {
+    interface Listener { void shop(); void army(); void attack(); void clan(); void profile(); void dirty(String toast); }
+    private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);private final HashMap<String,Bitmap> bitmaps=new HashMap<>();private final RectF[] nav=new RectF[5];
+    private final Listener listener;private GameModel model;private File assets;private Typeface dry;private GameCatalog.BuildingSpec buildMode;private String toast="Welcome, Chief";private long toastUntil=System.currentTimeMillis()+3500;
+    private float tileW=70f,tileH=35f,originX,originY;
+    GameView(Context c,GameModel m,File a,Listener l){super(c);model=m;assets=a;listener=l;try{File f=new File(a,"Fonts/DRY.ttf");dry=f.isFile()?Typeface.createFromFile(f):Typeface.create(Typeface.DEFAULT,Typeface.BOLD);}catch(Exception ex){dry=Typeface.create(Typeface.DEFAULT,Typeface.BOLD);}p.setTypeface(dry);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+    void setModel(GameModel m){model=m;invalidate();} void selectBuilding(GameCatalog.BuildingSpec s){buildMode=s;showToast("Tap an empty village tile to place "+s.name);}
+    void showToast(String s){toast=s;toastUntil=System.currentTimeMillis()+3500;invalidate();}
+
+    @Override protected void onDraw(Canvas c){super.onDraw(c);int w=getWidth(),h=getHeight();originX=w*.53f;originY=120;drawBackground(c,w,h);drawGrid(c);drawBuildings(c);drawHud(c,w);drawNav(c,w,h);if(buildMode!=null)drawHint(c,w);if(System.currentTimeMillis()<toastUntil)drawToast(c,w,h);}
+    private void drawBackground(Canvas c,int w,int h){LinearGradient g=new LinearGradient(0,0,0,h,Color.rgb(112,183,207),Color.rgb(35,78,68),Shader.TileMode.CLAMP);p.setShader(g);c.drawRect(0,0,w,h,p);p.setShader(null);}
+    private PointF tile(int x,int y){return new PointF(originX+(x-y)*tileW/2f,originY+(x+y)*tileH/2f);}
+    private int[] screen(float sx,float sy){float x=((sy-originY)/(tileH/2f)+(sx-originX)/(tileW/2f))/2f;float y=((sy-originY)/(tileH/2f)-(sx-originX)/(tileW/2f))/2f;return new int[]{Math.round(x),Math.round(y)};}
+    private void drawGrid(Canvas c){for(int sum=0;sum<=38;sum++)for(int x=0;x<20;x++){int y=sum-x;if(y<0||y>=20)continue;PointF q=tile(x,y);Path path=new Path();path.moveTo(q.x,q.y-tileH/2);path.lineTo(q.x+tileW/2,q.y);path.lineTo(q.x,q.y+tileH/2);path.lineTo(q.x-tileW/2,q.y);path.close();p.setColor((x+y)%2==0?Color.rgb(87,157,73):Color.rgb(96,170,79));p.setStyle(Paint.Style.FILL);c.drawPath(path,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(Color.rgb(55,103,69));c.drawPath(path,p);p.setStyle(Paint.Style.FILL);}}
+    private void drawBuildings(Canvas c){ArrayList<GameModel.Building> bs=new ArrayList<>(model.buildings);bs.sort((a,b)->Integer.compare(a.x+a.y,b.x+b.y));for(GameModel.Building b:bs){PointF q=tile(b.x,b.y);p.setColor(0x55000000);c.drawOval(new RectF(q.x-28,q.y-8,q.x+28,q.y+14),p);GameCatalog.BuildingSpec s=GameCatalog.building(b.id);Bitmap bm=s==null?null:art("building:"+b.id,s.art);if(bm!=null)drawBitmapBottom(c,bm,q.x,q.y+5,"wall".equals(b.id)?48:86);else{p.setColor(Color.rgb(137,90,58));c.drawRect(q.x-22,q.y-45,q.x+22,q.y-5,p);}p.setColor(0xdd15242a);c.drawRoundRect(new RectF(q.x+15,q.y-62,q.x+46,q.y-41),8,8,p);text(c,"L"+b.level,q.x+30,q.y-46,10,Color.WHITE,Paint.Align.CENTER);}}
+    private void drawHud(Canvas c,int w){p.setColor(0xe61d2d35);c.drawRoundRect(new RectF(18,18,270,82),18,18,p);p.setColor(Color.rgb(72,134,216));c.drawCircle(50,50,24,p);text(c,""+model.level,50,56,16,Color.WHITE,Paint.Align.CENTER);text(c,"DRAYVEN CHIEF",84,47,17,Color.WHITE,Paint.Align.LEFT);text(c,"XP "+model.xp,84,69,11,0xffd6ded9,Paint.Align.LEFT);float x=w-570;resource(c,x,"gold",model.gold,0xfff7c238);resource(c,x+185,"elixir",model.elixir,0xffdf48d1);resource(c,x+370,"gem",model.gems,0xff2bd694);}
+    private void resource(Canvas c,float x,String key,int value,int color){p.setColor(0xe61f3038);c.drawRoundRect(new RectF(x,18,x+172,70),15,15,p);Bitmap bm=art("ui:"+key,key);if(bm!=null)c.drawBitmap(bm,null,new RectF(x+7,25,x+44,62),p);else{p.setColor(color);c.drawCircle(x+26,44,18,p);}text(c,String.format(Locale.US,"%,d",value),x+54,52,15,Color.WHITE,Paint.Align.LEFT);}
+    private void drawNav(Canvas c,int w,int h){p.setColor(0xef132129);c.drawRect(0,h-105,w,h,p);String[]keys={"attack","shop","army","clan","profile"};String[]labels={"ATTACK","SHOP","ARMY","CLAN","PROFILE"};float start=(w-5*145)/2f;for(int i=0;i<5;i++){RectF r=new RectF(start+i*145+5,h-92,start+i*145+137,h-20);nav[i]=r;p.setColor(0xff42535c);c.drawRoundRect(r,15,15,p);Bitmap bm=art("ui:"+keys[i],keys[i]);if(bm!=null)c.drawBitmap(bm,null,new RectF(r.left+8,r.top+10,r.left+50,r.top+52),p);text(c,labels[i],r.left+58,r.top+43,12,Color.WHITE,Paint.Align.LEFT);}}
+    private void drawHint(Canvas c,int w){p.setColor(0xe8283c45);RectF r=new RectF(w/2f-210,85,w/2f+210,132);c.drawRoundRect(r,15,15,p);text(c,"PLACE "+buildMode.name.toUpperCase(Locale.ROOT),w/2f,115,13,Color.WHITE,Paint.Align.CENTER);}
+    private void drawToast(Canvas c,int w,int h){p.setColor(0xe815242b);RectF r=new RectF(w/2f-230,h-155,w/2f+230,h-115);c.drawRoundRect(r,13,13,p);text(c,toast,w/2f,h-130,12,Color.WHITE,Paint.Align.CENTER);postInvalidateDelayed(300);}
+
+    @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()!=MotionEvent.ACTION_DOWN)return true;for(int i=0;i<nav.length;i++)if(nav[i]!=null&&nav[i].contains(e.getX(),e.getY())){switch(i){case 0:listener.attack();break;case 1:listener.shop();break;case 2:listener.army();break;case 3:listener.clan();break;case 4:listener.profile();break;}return true;}if(buildMode!=null){int[]t=screen(e.getX(),e.getY());if(t[0]<0||t[0]>=20||t[1]<0||t[1]>=20)return true;for(GameModel.Building b:model.buildings)if(b.x==t[0]&&b.y==t[1]){showToast("Tile occupied");return true;}if(!model.spend(buildMode.currency,buildMode.cost)){showToast("Not enough "+buildMode.currency);return true;}model.buildings.add(new GameModel.Building(UUID.randomUUID().toString(),buildMode.id,t[0],t[1],1));model.gainXp(18);buildMode=null;listener.dirty("Building placed and queued for server sync.");invalidate();return true;}return true;}
+
+    private Bitmap art(String cache,String...terms){if(bitmaps.containsKey(cache))return bitmaps.get(cache);File f=PackManager.find(assets,terms);Bitmap b=f==null?null:BitmapFactory.decodeFile(f.getAbsolutePath());bitmaps.put(cache,b);return b;}
+    private void drawBitmapBottom(Canvas c,Bitmap b,float cx,float bottom,float max){float scale=Math.min(max/b.getWidth(),max/b.getHeight());float w=b.getWidth()*scale,h=b.getHeight()*scale;c.drawBitmap(b,null,new RectF(cx-w/2,bottom-h,cx+w/2,bottom),p);}
+    private void text(Canvas c,String s,float x,float y,float size,int color,Paint.Align a){p.setShader(null);p.setColor(color);p.setTextSize(size);p.setTextAlign(a);p.setTypeface(dry);c.drawText(s,x,y,p);}
+}
