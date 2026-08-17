@@ -8,8 +8,8 @@ android {
         applicationId 'ir.irautox.clashofdrayven'
         minSdk 24
         targetSdk 35
-        versionCode 30001
-        versionName '3.0.1'
+        versionCode 60000
+        versionName '6.0.0'
         externalNativeBuild {
             cmake { cppFlags '-std=c++17 -O3 -fvisibility=hidden -ffunction-sections -fdata-sections' }
         }
@@ -22,7 +22,7 @@ android {
             if (ks != null && file(ks).exists()) {
                 storeFile file(ks)
                 storePassword System.getenv('DRY_STORE_PASSWORD') ?: 'drayven-ci-2026'
-                keyAlias System.getenv('DRY_KEY_ALIAS') ?: 'drayven'
+                keyAlias System.getenv('DRY_KEY_ALIAS') ?: 'deathamir'
                 keyPassword System.getenv('DRY_KEY_PASSWORD') ?: 'drayven-ci-2026'
             }
         }
@@ -45,7 +45,5 @@ android {
         }
     }
 
-    packagingOptions {
-        jniLibs { useLegacyPackaging false }
-    }
+    packagingOptions { jniLibs { useLegacyPackaging false } }
 }
