@@ -47,9 +47,9 @@ jobs:
           dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
           python scripts/prepare_android_assets.py
       - name: Build pinned LuaJIT and embed bytecode
-        env:
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-        run: bash scripts/build_luajit_android.sh
+        run: |
+          export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/27.0.12077973"
+          bash scripts/build_luajit_android.sh
       - name: Compile Android release and libIrAutoX
         run: gradle -p android --no-daemon :app:assembleRelease
       - name: Zipalign 16K and verify APK
