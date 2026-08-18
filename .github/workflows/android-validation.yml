@@ -50,6 +50,28 @@ jobs:
         run: |
           export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/27.0.12077973"
           bash scripts/build_luajit_android.sh
+      - name: Package complete pinned LuaJIT vendor
+        run: |
+          set -euo pipefail
+          ROOT=dist/luajit-vendor
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/host" "$ROOT/runtime"
+          cp build/luajit/host/src/luajit "$ROOT/host/luajit-linux-x86_64"
+          cp -a build/luajit/host/src/jit "$ROOT/host/jit"
+          cp -a android/app/src/main/cpp/vendor/luajit/include "$ROOT/runtime/include"
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            mkdir -p "$ROOT/runtime/$ABI"
+            cp "android/app/src/main/cpp/vendor/luajit/$ABI/libluajit.a" "$ROOT/runtime/$ABI/libluajit.a"
+          done
+          cp build/luajit/host/COPYRIGHT "$ROOT/COPYRIGHT"
+          cp build/luajit/host/README "$ROOT/README.upstream"
+          cat > "$ROOT/PINNED_SOURCE.txt" <<'EOF'
+          LuaJIT upstream: https://github.com/LuaJIT/LuaJIT
+          Commit: 27f169c6c64175896d86e14f0d23c8d85c119c2c
+          This directory contains the complete build-time/runtime LuaJIT dependency used by ClashOfDrayven Android builds: host bytecode compiler, JIT modules, public headers, and static libraries for every supported ABI.
+          EOF
+          chmod +x "$ROOT/host/luajit-linux-x86_64"
+          find "$ROOT" -type f -print0 | sort -z | xargs -0 sha256sum > "$ROOT/SHA256SUMS.txt"
       - name: Compile Android release and libIrAutoX
         run: gradle -p android --no-daemon :app:assembleRelease
       - name: Zipalign 16K and verify APK
@@ -83,6 +105,7 @@ jobs:
             dist/validation/*
             dist/signing-tools/*
             dist/signing-tools/lib/*
+            dist/luajit-vendor/**/*
           if-no-files-found: error
 
   report:
