@@ -1,0 +1,30 @@
+name: Keep Main Only
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Delete every branch except main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove non-main branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Repository: $GITHUB_REPOSITORY"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name' | while IFS= read -r branch; do
+            if [ "$branch" = "main" ]; then
+              continue
+            fi
+            echo "Deleting branch: $branch"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch"
+          done
+          echo "Only main is retained."
