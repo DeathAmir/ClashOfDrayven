@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -34,7 +37,7 @@ jobs:
       - name: Install native toolchain
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 make git
+          sudo apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 make
           yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
       - name: Prepare compact packed assets
         run: |
@@ -63,12 +66,12 @@ jobs:
             mkdir -p "$ROOT/runtime/$ABI"
             cp "android/app/src/main/cpp/vendor/luajit/$ABI/libluajit.a" "$ROOT/runtime/$ABI/libluajit.a"
           done
-          cp build/luajit/host/COPYRIGHT "$ROOT/COPYRIGHT"
-          cp build/luajit/host/README "$ROOT/README.upstream"
+          cp third_party/LuaJIT/COPYRIGHT "$ROOT/COPYRIGHT"
+          cp third_party/LuaJIT/README "$ROOT/README.upstream"
           cat > "$ROOT/PINNED_SOURCE.txt" <<'EOF'
           LuaJIT upstream: https://github.com/LuaJIT/LuaJIT
           Commit: 27f169c6c64175896d86e14f0d23c8d85c119c2c
-          This directory contains the complete build-time/runtime LuaJIT dependency used by ClashOfDrayven Android builds: host bytecode compiler, JIT modules, public headers, and static libraries for every supported ABI.
+          Full upstream source is pinned as third_party/LuaJIT. This artifact also contains the exact host bytecode compiler, JIT modules, public/internal headers, and static libraries used for every supported Android ABI.
           EOF
           chmod +x "$ROOT/host/luajit-linux-x86_64"
           find "$ROOT" -type f -print0 | sort -z | xargs -0 sha256sum > "$ROOT/SHA256SUMS.txt"
@@ -129,7 +132,7 @@ jobs:
           - Workflow run: ${GITHUB_RUN_ID}
           - Source commit: ${GITHUB_SHA}
           - Compile result: ${{ needs.validate.result }}
-          - Pipeline: LuaJIT v2.1 pinned + C++/NDK + R8 + 16K zipalign + libIrAutoX.so
+          - Pipeline: pinned LuaJIT submodule + C++/NDK + R8 + 16K zipalign + libIrAutoX.so
           - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
           git config user.name "IrAutoX Build Bot"

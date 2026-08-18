@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PIN="27f169c6c64175896d86e14f0d23c8d85c119c2c"
+SOURCE="$ROOT/third_party/LuaJIT"
 NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/27.0.12077973}}"
 BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 WORK="$ROOT/build/luajit"
@@ -10,11 +11,20 @@ VENDOR="$ROOT/android/app/src/main/cpp/vendor/luajit"
 LUA="$ROOT/android/app/src/main/lua/gameplay.lua"
 GEN="$ROOT/android/app/src/main/cpp/generated/LuaGameplay.generated.hpp"
 
+if [[ ! -f "$SOURCE/src/Makefile" ]]; then
+  echo "Pinned LuaJIT submodule is missing. Clone with --recurse-submodules or run: git submodule update --init --recursive" >&2
+  exit 2
+fi
+ACTUAL="$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)"
+if [[ "$ACTUAL" != "$PIN" ]]; then
+  echo "LuaJIT submodule mismatch: expected $PIN, got ${ACTUAL:-unknown}" >&2
+  exit 3
+fi
+
 rm -rf "$WORK" "$VENDOR"
 mkdir -p "$WORK" "$VENDOR/include"
+cp -a "$SOURCE" "$WORK/host"
 
-git clone --quiet https://github.com/LuaJIT/LuaJIT.git "$WORK/host"
-git -C "$WORK/host" checkout --quiet "$PIN"
 make -C "$WORK/host" -j2
 export LUA_PATH="$WORK/host/src/?.lua;$WORK/host/src/jit/?.lua;;"
 "$WORK/host/src/luajit" -bWd "$LUA" "$WORK/gameplay32.luac"
@@ -48,4 +58,4 @@ build_one arm64-v8a aarch64-linux-android24-clang aarch64-linux-android- gcc
 build_one armeabi-v7a armv7a-linux-androideabi24-clang arm-linux-androideabi- "gcc -m32"
 build_one x86_64 x86_64-linux-android24-clang x86_64-linux-android- gcc
 
-echo "LuaJIT pinned at $PIN and embedded into DrayvenEngine build inputs."
+echo "LuaJIT source pinned in third_party/LuaJIT at $PIN; bytecode and static runtimes embedded into DrayvenEngine inputs."
