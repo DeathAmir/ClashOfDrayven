@@ -16,8 +16,10 @@ mkdir -p "$WORK" "$VENDOR/include"
 git clone --quiet https://github.com/LuaJIT/LuaJIT.git "$WORK/host"
 git -C "$WORK/host" checkout --quiet "$PIN"
 make -C "$WORK/host" -j2
+export LUA_PATH="$WORK/host/src/?.lua;$WORK/host/src/jit/?.lua;;"
 "$WORK/host/src/luajit" -bWd "$LUA" "$WORK/gameplay32.luac"
 "$WORK/host/src/luajit" -bXd "$LUA" "$WORK/gameplay64.luac"
+unset LUA_PATH
 python "$ROOT/scripts/embed_lua_bytecode.py" --bytecode32 "$WORK/gameplay32.luac" --bytecode64 "$WORK/gameplay64.luac" --out "$GEN"
 
 cp "$WORK/host/src/"*.h "$VENDOR/include/"
