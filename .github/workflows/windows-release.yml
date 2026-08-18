@@ -208,3 +208,37 @@ jobs:
             release-files/ClashOfDrayven-Android-Play.aab
             release-files/libclashofdrayven-arm64-v8a.so
           fail_on_unmatched_files: true
+
+  report:
+    name: Record exact build result
+    needs: [windows, android, release]
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Write BUILD_STATUS.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          cat > BUILD_STATUS.md <<EOF
+          # Clash Of Drayven Build Status
+
+          - Workflow run: ${GITHUB_RUN_ID}
+          - Source commit: ${GITHUB_SHA}
+          - Windows: ${{ needs.windows.result }}
+          - Android: ${{ needs.android.result }}
+          - Release: ${{ needs.release.result }}
+          - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          git config user.name "IrAutoX Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add BUILD_STATUS.md
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record build status [skip ci]"
+          git push origin HEAD:main
