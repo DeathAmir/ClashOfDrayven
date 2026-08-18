@@ -1,8 +1,8 @@
 # Clash Of Drayven Build Status
 
-- Workflow run: 32141358981
-- Source commit: 960e6482ca8d19c862091edce01ab886cb6e59a6
+- Workflow run: 32146082085
+- Source commit: 3c0ef6ea5a7f7c34f551acdafe86d8aba4364012
 - Windows: success
 - Android: failure
 - Release: skipped
-- Run URL: https://github.com/DeathAmir/ClashOfDrayven/actions/runs/32141358981
+- Run URL: https://github.com/DeathAmir/ClashOfDrayven/actions/runs/32146082085
