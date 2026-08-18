@@ -1,7 +1,7 @@
 # Android Validation
 
-- Workflow run: 32146082089
-- Source commit: 3c0ef6ea5a7f7c34f551acdafe86d8aba4364012
+- Workflow run: 32146573636
+- Source commit: 69a06507e3feda482006782dcb174fa5f050c4f9
 - Compile result: success
 - Pipeline: C++/NDK + R8 + zipalign
-- Run URL: https://github.com/DeathAmir/ClashOfDrayven/actions/runs/32146082089
+- Run URL: https://github.com/DeathAmir/ClashOfDrayven/actions/runs/32146573636
