@@ -1,47 +1,42 @@
 # Clash Of Drayven
 
-An online 2D/isometric base-builder and raid game client for Windows and Android.
+![Clash Of Drayven](Assets/TEMP.jpg)
 
-## Full client build
+**Clash Of Drayven** is an online 2D/isometric base-builder and raid game for Windows and Android, developed under the IrAutoX brand.
 
-The current client includes:
+## DrayvenEngine release architecture
 
-- required account registration/login against `http://irautox.ir:8456`
-- server-restored Gold, Elixir, Gems, XP, level, buildings, army and clan state
-- default new-account economy: 7,000 Gold / 7,000 Elixir / 250 Gems
-- asset-driven isometric village renderer
-- build shop, placement, upgrades and passive production
-- Gold/Elixir storages, Barracks, Army Camp, Cannon, Archer Tower, Mortar, Air Defense, Wall and Clan Keep
-- eight recruitable troop classes and raid gameplay
-- clan creation stored by the server
-- profile/logout/server-sync flow
-- DRY.ttf runtime font and custom splash screen
-- app icon embedded in the Windows executable and Android launcher
+The release pipeline now includes:
+
+- a 4-second pulsing IrAutoX splash on Android and Windows; the build derives a white/dark-corrected splash from `Assets/IrAutoX.jpg`
+- launcher/application icon generation from `Assets/COD.jpg`
+- `Assets/vazir.ttf` for Persian UI and `Assets/IrAutoX-Magic_5.ttf` for Clash Of Drayven branding/title surfaces
+- persistent login sessions; Windows uses DPAPI and Android uses AES/GCM with an Android Keystore-backed key
+- Persian/RTL Android login, village HUD, troop/build labels and raid result surfaces
+- native `DrayvenEngine` core compiled into `libclashofdrayven.so`
+- R8/ProGuard release minification plus stripped native symbols
+- Android APK packaging in the correct order: unsigned build -> `zipalign` -> `apksigner`
+- signed Android App Bundle (`.aab`) output for Google Play Console upload
 - exactly 20 SHA-256-verified runtime asset packs: `CLDRYPK1` ... `CLDRYPK20`
-- Windows UPX `--best --lzma` attempt with verification and automatic fallback
-- Android native `libclashofdrayven.so`, loaded at startup
-- Android R8 release minification and symbol-stripped native build
+- Windows UPX `--best --lzma` attempt with validation and automatic fallback
 
-## Server
+## Android production signing
 
-The production endpoint expected by both clients is:
+Production releases are designed to use one persistent IrAutoX keystore stored only in GitHub Actions Secrets:
 
-```text
-http://irautox.ir:8456
-```
+- `ANDROID_KEYSTORE_B64`
+- `ANDROID_STORE_PASSWORD`
+- `ANDROID_KEY_PASSWORD`
+- `ANDROID_KEY_ALIAS` (recommended: `irautox`)
 
-The Python server is deliberately not stored in this repository. It is deployed separately so database/authentication implementation can be managed independently from public client code.
+The private keystore must never be committed to this public repository. A stable key lets Android accept future APK updates from the same signer. Google Play trust is separate: for Play distribution, register the app in Google Play Console and use Play App Signing / the configured upload key. A locally valid signature by itself cannot make an app appear as Google-Play-verified.
+
+## Native security boundary
+
+`DrayvenEngine` is the native boundary for logic that should not live plainly in DEX. JNI is deliberately small and the release uses hidden native symbols and section garbage collection. This increases reverse-engineering cost, but it is not a substitute for server-side authority: database credentials, signing private keys and authoritative game secrets must remain off the client.
 
 ## Asset pipeline
 
-`scripts/fetch_assets.py` downloads only the open runtime source used by the build, copies the CC0 sprite subtree, downloads Lilita One under SIL OFL and renames it to `DRY.ttf`. `cldrypk pack20` then balances the asset tree across twenty lossless packs. Both clients unpack and validate those files at runtime.
+`scripts/fetch_assets.py` prepares the open runtime assets. `scripts/prepare_branding.py` generates platform branding from the repository-owned artwork and copies the provided fonts into the Android asset tree. `cldrypk pack20` then builds the twenty verified runtime packs.
 
 See `THIRD_PARTY_NOTICES.md` and `PACK_FORMAT.md`.
-
-## Android signing
-
-If `ANDROID_KEYSTORE_B64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD` and `ANDROID_KEY_ALIAS` repository secrets exist, the release workflow uses that stable key. Otherwise CI generates a valid installable fallback key for that workflow run. Keep a stable private keystore configured for production updates.
-
-## Reverse engineering
-
-The release uses asset packing/integrity verification, R8 on Android, stripped native symbols and UPX where safe. No client application can be made literally impossible to reverse engineer; server secrets and database credentials therefore never belong in the client.

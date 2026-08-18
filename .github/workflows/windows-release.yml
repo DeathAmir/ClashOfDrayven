@@ -1,4 +1,4 @@
-name: Clash Of Drayven Full Client Release
+name: Clash Of Drayven Release
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   windows:
-    name: Windows net48 + CLDRYPK20
+    name: Windows + branded splash
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch reference client open assets and DRY font
+      - name: Prepare IrAutoX branding and Vazir theme
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          python scripts/prepare_branding.py
+          python scripts/patch_windows_theme.py
+      - name: Fetch reference client assets
         run: python scripts/fetch_assets.py
       - name: Restore and build
         shell: pwsh
@@ -31,7 +36,7 @@ jobs:
           dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
           dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
           dotnet build ClashOfDrayven.csproj -c Release --no-restore
-      - name: Create 20 lossless CLDRYPK parts
+      - name: Create verified CLDRYPK parts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/packs | Out-Null
@@ -43,12 +48,10 @@ jobs:
           dotnet publish ClashOfDrayven.csproj -c Release --no-restore -o dist/windows
           New-Item -ItemType Directory -Force -Path dist/windows/Assets/Fonts | Out-Null
           Copy-Item dist/packs/CLDRYPK* dist/windows/Assets/ -Force
-          Copy-Item build-assets/PackSource/Fonts/DRY.ttf dist/windows/Assets/Fonts/DRY.ttf -Force
-          Copy-Item build-assets/PackSource/Fonts/OFL-DRY.txt dist/windows/Assets/Fonts/OFL-DRY.txt -Force
           Copy-Item README.md dist/windows/README.md -Force
           Copy-Item THIRD_PARTY_NOTICES.md dist/windows/THIRD_PARTY_NOTICES.md -Force
           Copy-Item PACK_FORMAT.md dist/windows/PACK_FORMAT.md -Force
-      - name: UPX hard-compress executable when safe
+      - name: UPX executable when safe
         continue-on-error: true
         shell: pwsh
         run: |
@@ -78,7 +81,7 @@ jobs:
           if-no-files-found: error
 
   android:
-    name: Android signed APK + native SO
+    name: Android zipalign + apksigner + AAB + DrayvenEngine
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,15 +101,17 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK/NDK
         run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-      - name: Fetch assets and create same 20 packs
+      - name: Prepare packs and branding
         run: |
+          python -m pip install --disable-pip-version-check pillow
           python scripts/fetch_assets.py
+          python scripts/prepare_branding.py
           dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
           dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
           mkdir -p dist/packs
           dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
           python scripts/prepare_android_assets.py
-      - name: Prepare DeathAmir APK signing key
+      - name: Prepare IrAutoX signing key
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -114,37 +119,58 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           if [ -n "$ANDROID_KEYSTORE_B64" ]; then
-            echo "SIGNING_MODE=persistent-github-secret" >> "$GITHUB_ENV"
             echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/release.jks"
-            echo "DRY_STORE_PASSWORD=${ANDROID_STORE_PASSWORD}" >> "$GITHUB_ENV"
-            echo "DRY_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}" >> "$GITHUB_ENV"
-            echo "DRY_KEY_ALIAS=${ANDROID_KEY_ALIAS:-deathamir}" >> "$GITHUB_ENV"
+            echo "SIGNING_MODE=persistent-irautox-secret" >> "$GITHUB_ENV"
+            echo "DRY_STORE_PASSWORD=$ANDROID_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "DRY_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "DRY_KEY_ALIAS=${ANDROID_KEY_ALIAS:-irautox}" >> "$GITHUB_ENV"
           else
-            echo "SIGNING_MODE=ci-fallback-not-update-stable" >> "$GITHUB_ENV"
-            keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/android/release.jks" -storepass drayven-ci-2026 -alias deathamir -keypass drayven-ci-2026 -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=DeathAmir, OU=Clash Of Drayven, O=IrAutoX, L=Kermanshah, C=IR"
+            if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+              echo "Main releases require ANDROID_KEYSTORE_B64 / ANDROID_STORE_PASSWORD / ANDROID_KEY_PASSWORD secrets." >&2
+              exit 1
+            fi
+            keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/android/release.jks" -storepass drayven-ci-2026 -alias irautox -keypass drayven-ci-2026 -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=IrAutoX, OU=DrayvenEngine, O=IrAutoX, C=DE"
+            echo "SIGNING_MODE=ci-test-only" >> "$GITHUB_ENV"
             echo "DRY_STORE_PASSWORD=drayven-ci-2026" >> "$GITHUB_ENV"
             echo "DRY_KEY_PASSWORD=drayven-ci-2026" >> "$GITHUB_ENV"
-            echo "DRY_KEY_ALIAS=deathamir" >> "$GITHUB_ENV"
+            echo "DRY_KEY_ALIAS=irautox" >> "$GITHUB_ENV"
           fi
           echo "DRY_KEYSTORE=$GITHUB_WORKSPACE/android/release.jks" >> "$GITHUB_ENV"
-      - name: Build signed release APK
-        run: gradle -p android --no-daemon :app:assembleRelease
-      - name: Verify signature package and native library
+      - name: Build unsigned APK and AAB
+        run: gradle -p android --no-daemon :app:assembleRelease :app:bundleRelease
+      - name: zipalign then sign APK and sign AAB
         run: |
-          APK=android/app/build/outputs/apk/release/app-release.apk
+          mkdir -p dist/native
+          UNSIGNED=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          ALIGNED=dist/ClashOfDrayven-Android-aligned.apk
+          FINAL=dist/ClashOfDrayven-Android-signed.apk
+          $ANDROID_HOME/build-tools/35.0.0/zipalign -f -p 4 "$UNSIGNED" "$ALIGNED"
+          $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+            --ks "$DRY_KEYSTORE" --ks-key-alias "$DRY_KEY_ALIAS" \
+            --ks-pass "pass:$DRY_STORE_PASSWORD" --key-pass "pass:$DRY_KEY_PASSWORD" \
+            --out "$FINAL" "$ALIGNED"
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          cp "$AAB" dist/ClashOfDrayven-Android-Play.aab
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore "$DRY_KEYSTORE" -storepass "$DRY_STORE_PASSWORD" -keypass "$DRY_KEY_PASSWORD" \
+            dist/ClashOfDrayven-Android-Play.aab "$DRY_KEY_ALIAS"
+      - name: Verify signature, package and native library
+        run: |
+          APK=dist/ClashOfDrayven-Android-signed.apk
           echo "Signing mode: $SIGNING_MODE"
+          $ANDROID_HOME/build-tools/35.0.0/zipalign -c -v 4 "$APK"
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs "$APK"
+          jarsigner -verify -verbose -certs dist/ClashOfDrayven-Android-Play.aab
           $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "package: name='ir.irautox.clashofdrayven'"
           unzip -l "$APK" | grep 'libclashofdrayven.so'
-          mkdir -p dist/native
           unzip -j "$APK" 'lib/arm64-v8a/libclashofdrayven.so' -d dist/native
-          cp "$APK" dist/ClashOfDrayven-Android-signed.apk
           cp dist/native/libclashofdrayven.so dist/libclashofdrayven-arm64-v8a.so
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
           path: |
             dist/ClashOfDrayven-Android-signed.apk
+            dist/ClashOfDrayven-Android-Play.aab
             dist/libclashofdrayven-arm64-v8a.so
           if-no-files-found: error
 
@@ -158,26 +184,27 @@ jobs:
         with:
           path: release-files
           merge-multiple: true
-      - name: List release payload
-        run: find release-files -maxdepth 2 -type f -printf '%p %s bytes\n'
       - name: Create public release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: drayven-${{ github.run_number }}
-          name: Clash Of Drayven Reference Client Build ${{ github.run_number }}
+          name: Clash Of Drayven • DrayvenEngine Build ${{ github.run_number }}
           body: |
-            Clash Of Drayven by DeathAmir.
+            Clash Of Drayven by IrAutoX.
 
-            Android package: ir.irautox.clashofdrayven
-            Server endpoint: http://irautox.ir:8456
-
-            Mobile overhaul follows the interaction structure of developers-hub-org/clash-of-clans-clone: deterministic reference-client CC0 asset mapping, authenticated player name, redesigned login/register and HUD, troop-card selection, tap-to-deploy attacks, troop consumption, live building HP, battle timer, destruction percentage, stars and loot.
-
-            The build contains 20 verified CLDRYPK runtime packs and libclashofdrayven.so. Persistent Android update signing is automatically used when repository signing secrets are configured; otherwise CI uses a valid DeathAmir fallback certificate for install/test builds without exposing a private key in this public repository.
+            - 4-second pulsing IrAutoX splash on Android/Windows builds
+            - COD artwork used as application icon
+            - Persian/Vazir Android UI and IrAutoX Magic title font
+            - Android Keystore encrypted persistent session
+            - R8/ProGuard release minification
+            - native DrayvenEngine core in libclashofdrayven.so
+            - Android APK is zipaligned before apksigner signing
+            - signed AAB is included for Google Play upload; Google Play trust still depends on Play Console / Play App Signing configuration
           files: |
             release-files/ClashOfDrayven-Windows.exe
             release-files/ClashOfDrayven-Windows.zip
             release-files/ClashOfDrayven-Windows-Ultra.7z
             release-files/ClashOfDrayven-Android-signed.apk
+            release-files/ClashOfDrayven-Android-Play.aab
             release-files/libclashofdrayven-arm64-v8a.so
           fail_on_unmatched_files: true
