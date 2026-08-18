@@ -1,4 +1,4 @@
-name: Android Unsigned Validation
+name: Android Native Validation
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   validate:
-    name: Compile Android Java C++ R8 NDK
+    name: Compile Android C++ R8 NDK and zipalign
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,23 +45,31 @@ jobs:
           python scripts/prepare_android_assets.py
       - name: Compile release APK AAB and DrayvenEngine
         run: gradle -p android --no-daemon :app:assembleRelease :app:bundleRelease
-      - name: Verify unsigned package structure
+      - name: Zipalign and verify package structure
         run: |
           set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
           APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
           AAB=android/app/build/outputs/bundle/release/app-release.aab
           test -f "$APK"
           test -f "$AAB"
-          unzip -l "$APK" | grep 'lib/arm64-v8a/libclashofdrayven.so'
-          unzip -l "$APK" | grep 'res/' >/dev/null
-          mkdir -p dist/validation
-          cp "$APK" dist/validation/ClashOfDrayven-Android-unsigned-validation.apk
+          mkdir -p dist/validation dist/signing-tools/lib
+          "$BT/zipalign" -f -p 4 "$APK" dist/validation/ClashOfDrayven-Android-aligned-unsigned.apk
+          "$BT/zipalign" -c -v 4 dist/validation/ClashOfDrayven-Android-aligned-unsigned.apk
+          unzip -l dist/validation/ClashOfDrayven-Android-aligned-unsigned.apk | grep 'lib/arm64-v8a/libclashofdrayven.so'
           cp "$AAB" dist/validation/ClashOfDrayven-Android-unsigned-validation.aab
-          unzip -j "$APK" 'lib/arm64-v8a/libclashofdrayven.so' -d dist/validation
+          unzip -j dist/validation/ClashOfDrayven-Android-aligned-unsigned.apk 'lib/arm64-v8a/libclashofdrayven.so' -d dist/validation
+          cp "$BT/apksigner" dist/signing-tools/apksigner
+          cp "$BT/zipalign" dist/signing-tools/zipalign
+          cp "$BT/lib/apksigner.jar" dist/signing-tools/lib/apksigner.jar
+          chmod +x dist/signing-tools/apksigner dist/signing-tools/zipalign
       - uses: actions/upload-artifact@v4
         with:
-          name: android-unsigned-validation
-          path: dist/validation/*
+          name: android-aligned-validation
+          path: |
+            dist/validation/*
+            dist/signing-tools/*
+            dist/signing-tools/lib/*
           if-no-files-found: error
 
   report:
@@ -85,6 +93,7 @@ jobs:
           - Workflow run: ${GITHUB_RUN_ID}
           - Source commit: ${GITHUB_SHA}
           - Compile result: ${{ needs.validate.result }}
+          - Pipeline: C++/NDK + R8 + zipalign
           - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
           git config user.name "IrAutoX Build Bot"
