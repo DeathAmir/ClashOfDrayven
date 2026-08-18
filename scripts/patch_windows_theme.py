@@ -16,6 +16,7 @@ if shell.exists():
     c=shell.read_text(encoding='utf-8')
     c=c.replace('BackColor = Color.White;', 'BackColor = Color.Black;', 1)
     c=c.replace('Color.FromArgb((int)(alpha * 255), 20, 20, 20)', 'Color.FromArgb((int)(alpha * 255), 255, 255, 255)', 1)
+    c=c.replace('Text = "CLASH OF DRAYVEN", ForeColor = DryTheme.Text, Font = DryTheme.Font(32)', 'Text = "CLASH OF DRAYVEN", ForeColor = DryTheme.Text, Font = BrandFonts.Magic(32)', 1)
     shell.write_text(c,encoding='utf-8')
 
-print('Windows theme patched: Vazir + black splash background + white pulsing brand')
+print('Windows theme patched: Vazir + IrAutoX Magic title + black splash + white pulsing brand')

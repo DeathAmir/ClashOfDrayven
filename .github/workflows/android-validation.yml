@@ -1,0 +1,94 @@
+name: Android Unsigned Validation
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'ANDROID_VALIDATION.md'
+      - 'BUILD_STATUS.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Compile Android Java C++ R8 NDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK and NDK
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+      - name: Prepare branded assets and packs
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          python scripts/fetch_assets.py
+          python scripts/prepare_branding.py
+          dotnet restore Tools/ClDryPacker/ClDryPacker.csproj
+          dotnet build Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-restore
+          mkdir -p dist/packs
+          dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
+          python scripts/prepare_android_assets.py
+      - name: Compile release APK AAB and DrayvenEngine
+        run: gradle -p android --no-daemon :app:assembleRelease :app:bundleRelease
+      - name: Verify unsigned package structure
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          test -f "$APK"
+          test -f "$AAB"
+          unzip -l "$APK" | grep 'lib/arm64-v8a/libclashofdrayven.so'
+          unzip -l "$APK" | grep 'res/' >/dev/null
+          mkdir -p dist/validation
+          cp "$APK" dist/validation/ClashOfDrayven-Android-unsigned-validation.apk
+          cp "$AAB" dist/validation/ClashOfDrayven-Android-unsigned-validation.aab
+          unzip -j "$APK" 'lib/arm64-v8a/libclashofdrayven.so' -d dist/validation
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-unsigned-validation
+          path: dist/validation/*
+          if-no-files-found: error
+
+  report:
+    name: Record Android validation result
+    needs: [validate]
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Write validation status
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          cat > ANDROID_VALIDATION.md <<EOF
+          # Android Validation
+
+          - Workflow run: ${GITHUB_RUN_ID}
+          - Source commit: ${GITHUB_SHA}
+          - Compile result: ${{ needs.validate.result }}
+          - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          git config user.name "IrAutoX Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add ANDROID_VALIDATION.md
+          git commit -m "Record Android validation [skip ci]" || exit 0
+          git push origin HEAD:main
