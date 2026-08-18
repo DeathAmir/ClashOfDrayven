@@ -1,7 +1,7 @@
 # Android Validation
 
-- Workflow run: 32147566323
-- Source commit: f616c878e80ab7d2ee9e3f8310885edce81b5128
-- Compile result: success
-- Pipeline: C++/NDK + R8 + zipalign
-- Run URL: https://github.com/DeathAmir/ClashOfDrayven/actions/runs/32147566323
+- Workflow run: 32150526426
+- Source commit: 16b368adeacc94a6aa9d9d557f2eaf2a011c131f
+- Compile result: failure
+- Pipeline: LuaJIT v2.1 pinned + C++/NDK + R8 + 16K zipalign + libIrAutoX.so
+- Run URL: https://github.com/DeathAmir/ClashOfDrayven/actions/runs/32150526426
