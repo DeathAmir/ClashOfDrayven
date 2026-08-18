@@ -1,9 +1,12 @@
 -keep class ir.irautox.clashofdrayven.MainActivity { public <init>(); }
 -keep class ir.irautox.clashofdrayven.NativeBridge { native <methods>; }
 -keepclasseswithmembernames,includedescriptorclasses class * { native <methods>; }
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,Signature,InnerClasses,EnclosingMethod
 -renamesourcefileattribute SourceFile
--keepattributes SourceFile,LineNumberTable
+-allowaccessmodification
+-adaptclassstrings
+-repackageclasses 'ir.irautox.d'
+-optimizationpasses 7
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);

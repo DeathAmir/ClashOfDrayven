@@ -3,23 +3,16 @@
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true"
         android:label="Clash Of Drayven"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme">
         <meta-data android:name="ir.irautox.clashofdrayven.AUTHOR" android:value="IrAutoX" />
-        <meta-data android:name="ir.irautox.clashofdrayven.ENGINE" android:value="DrayvenEngine" />
-        <activity
-            android:name=".MainActivity"
-            android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <meta-data android:name="ir.irautox.clashofdrayven.ENGINE" android:value="DrayvenEngine + LuaJIT" />
+        <activity android:name=".MainActivity" android:screenOrientation="landscape" android:configChanges="orientation|screenSize|keyboardHidden" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
     </application>
 </manifest>
