@@ -13,14 +13,16 @@ for i in range(1,21):
 manifest=src/'CLDRYPK.manifest'
 if manifest.exists(): shutil.copy2(manifest,dst/manifest.name)
 
+bridge=root/'android'/'app'/'src'/'main'/'java'/'ir'/'irautox'/'clashofdrayven'/'NativeBridge.java'
 main=root/'android'/'app'/'src'/'main'/'java'/'ir'/'irautox'/'clashofdrayven'/'MainActivity.java'
-text=main.read_text(encoding='utf-8')
-old='private final Runnable production=new Runnable(){@Override public void run(){if(model!=null){int g=0,e=0;for(GameModel.Building b:model.buildings){if("goldmine".equals(b.id))g+=2+b.level*2;if("elixircollector".equals(b.id))e+=2+b.level*2;}if(g+e>0){model.gold=Math.min(9999999,model.gold+g);model.elixir=Math.min(9999999,model.elixir+e);dirty(null);if(game!=null)game.invalidate();}}main.postDelayed(this,1800);}};'
-new='private final Runnable production=new Runnable(){@Override public void run(){if(model!=null){int oldGold=model.gold,oldElixir=model.elixir;model.applyProduction();if(model.gold!=oldGold||model.elixir!=oldElixir){dirty(null);if(game!=null)game.invalidate();}}main.postDelayed(this,1800);}};'
-if old not in text: raise SystemExit('MainActivity production rule changed; native patch not applied')
-text=text.replace(old,new,1)
-text=text.replace('root.setBackgroundColor(Color.WHITE);root.setLayoutDirection', 'root.setBackgroundColor(Color.BLACK);root.setLayoutDirection',1)
-main.write_text(text,encoding='utf-8')
+bridge_text=bridge.read_text(encoding='utf-8')
+main_text=main.read_text(encoding='utf-8')
+if 'System.loadLibrary("IrAutoX")' not in bridge_text:
+    raise SystemExit('NativeBridge is not targeting libIrAutoX.so')
+if 'static native int[] production(' not in bridge_text:
+    raise SystemExit('Native production bridge is missing')
+if 'root.setBackgroundColor(Color.BLACK)' not in main_text:
+    raise SystemExit('Black IrAutoX splash is missing')
 
 print('Android asset packs:',len(list(dst.iterdir())))
-print('Android runtime patched: production -> DrayvenEngine native core; splash background -> black')
+print('Android runtime verified: libIrAutoX + native production + black splash')
