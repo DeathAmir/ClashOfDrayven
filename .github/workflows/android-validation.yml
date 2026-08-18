@@ -124,9 +124,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git reset --hard origin/main
-          cat > ANDROID_VALIDATION.md <<EOF
+          git config user.name "IrAutoX Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cat > ANDROID_VALIDATION.md <<EOF
           # Android Validation
 
           - Workflow run: ${GITHUB_RUN_ID}
@@ -135,8 +138,15 @@ jobs:
           - Pipeline: pinned LuaJIT submodule + C++/NDK + R8 + 16K zipalign + libIrAutoX.so
           - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
-          git config user.name "IrAutoX Build Bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add ANDROID_VALIDATION.md
-          git commit -m "Record Android LuaJIT validation [skip ci]" || exit 0
-          git push origin HEAD:main
+            git add ANDROID_VALIDATION.md
+            if git diff --cached --quiet; then
+              exit 0
+            fi
+            git commit -m "Record Android LuaJIT validation [skip ci]"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Could not publish Android validation status after retries" >&2
+          exit 1
