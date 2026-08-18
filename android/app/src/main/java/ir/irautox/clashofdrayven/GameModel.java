@@ -9,9 +9,7 @@ final class GameModel {
     final LinkedHashMap<String,Integer> units=new LinkedHashMap<>();
     String clanName=null, clanTag=null;
 
-    GameModel(){
-        units.put("vanguard",0);units.put("ranger",0);units.put("rogue",0);units.put("breaker",0);units.put("brute",0);units.put("mage",0);units.put("healer",0);units.put("stormcaller",0);
-    }
+    GameModel(){for(GameCatalog.UnitSpec u:GameCatalog.UNITS)units.put(u.id,0);}
 
     static GameModel from(JSONObject root) throws JSONException {
         JSONObject s=root.has("state")?root.getJSONObject("state"):root; GameModel m=new GameModel();
@@ -30,8 +28,23 @@ final class GameModel {
         return s;
     }
 
-    boolean spend(String currency,int amount){if(amount<=0)return true;if("gold".equals(currency)&&gold>=amount){gold-=amount;return true;}if("elixir".equals(currency)&&elixir>=amount){elixir-=amount;return true;}if("gems".equals(currency)&&gems>=amount){gems-=amount;return true;}return false;}
-    void gainXp(int n){xp+=Math.max(0,n);while(xp>=level*220){xp-=level*220;level++;gems+=10;}}
+    boolean spend(String currency,int amount){
+        int[] r=NativeBridge.spend(currency,gold,elixir,gems,amount);
+        if(r==null||r.length<4)return false;
+        gold=r[1];elixir=r[2];gems=r[3];return r[0]!=0;
+    }
+
+    void gainXp(int n){
+        int[] r=NativeBridge.gainXp(xp,level,gems,n);
+        if(r!=null&&r.length>=3){xp=r[0];level=r[1];gems=r[2];}
+    }
+
+    void applyProduction(){
+        int n=buildings.size();String[] ids=new String[n];int[] levels=new int[n];
+        for(int i=0;i<n;i++){Building b=buildings.get(i);ids[i]=b.id;levels[i]=b.level;}
+        int[] r=NativeBridge.production(ids,levels);
+        if(r!=null&&r.length>=2){gold=Math.min(9_999_999,gold+Math.max(0,r[0]));elixir=Math.min(9_999_999,elixir+Math.max(0,r[1]));}
+    }
 
     static final class Building { String instance,id;int x,y,level;Building(String i,String d,int x,int y,int l){this.instance=i;this.id=d;this.x=x;this.y=y;this.level=l;} }
 }
