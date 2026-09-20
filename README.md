@@ -4,6 +4,10 @@
 
 **Clash Of Drayven** is an online 2D/isometric base-builder and raid game for Windows and Android, developed under the IrAutoX brand.
 
+## Current client release
+
+The current client version is **7.1.0** for Windows and Android.
+
 ## DrayvenEngine release architecture
 
 The release pipeline now includes:
