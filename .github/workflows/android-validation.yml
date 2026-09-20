@@ -82,7 +82,7 @@ jobs:
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/35.0.0"
           APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=dist/validation/ClashOfDrayven-Android-v7.0.0-aligned-unsigned.apk
+          OUT=dist/validation/ClashOfDrayven-Android-v7.1.0-aligned-unsigned.apk
           mkdir -p dist/validation dist/signing-tools/lib
           test -f "$APK"
           "$BT/zipalign" -P 16 -f 4 "$APK" "$OUT"
