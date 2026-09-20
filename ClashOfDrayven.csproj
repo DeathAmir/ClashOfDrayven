@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <AssemblyName>ClashOfDrayven</AssemblyName>
+    <Version>7.1.0</Version>
+    <AssemblyVersion>7.1.0.0</AssemblyVersion>
+    <FileVersion>7.1.0.0</FileVersion>
     <RootNamespace>ClashOfDrayven</RootNamespace>
     <StartupObject>ClashOfDrayven.OnlineProgram</StartupObject>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
