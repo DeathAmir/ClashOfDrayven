@@ -2,10 +2,11 @@ name: Android IrAutoX LuaJIT Release Validation
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
     paths-ignore:
-      - 'ANDROID_VALIDATION.md'
-      - 'BUILD_STATUS.md'
+      - ANDROID_VALIDATION.md
+      - BUILD_STATUS.md
   workflow_dispatch:
 
 permissions:
@@ -15,32 +16,66 @@ jobs:
   validate:
     name: Android LuaJIT C++ R8 zipalign
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
       - uses: android-actions/setup-android@v3
-      - name: Install native toolchain
+
+      - name: Accept Android SDK licenses
+        shell: bash
         run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Install native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 make
-          yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-      - name: Prepare compact packed assets
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.0.12077973" \
+            "cmake;3.22.1"
+
+      - name: Verify Android SDK
+        shell: bash
         run: |
+          set -euo pipefail
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
+          test -d "$ANDROID_HOME/ndk/27.0.12077973"
+          test -d "$ANDROID_HOME/cmake/3.22.1"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+      - name: Prepare compact packed assets
+        shell: bash
+        run: |
+          set -euo pipefail
           python -m pip install --disable-pip-version-check pillow
           python scripts/fetch_assets.py
           python scripts/prepare_branding.py
@@ -49,58 +84,115 @@ jobs:
           mkdir -p dist/packs
           dotnet run --project Tools/ClDryPacker/ClDryPacker.csproj -c Release --no-build -- pack20 build-assets/PackSource dist/packs
           python scripts/prepare_android_assets.py
+
       - name: Build pinned LuaJIT and embed bytecode
-        run: |
-          export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/27.0.12077973"
-          bash scripts/build_luajit_android.sh
-      - name: Package complete pinned LuaJIT vendor
+        shell: bash
         run: |
           set -euo pipefail
+          export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/27.0.12077973"
+          export NDK_ROOT="$ANDROID_NDK_ROOT"
+          bash scripts/build_luajit_android.sh
+
+      - name: Package complete pinned LuaJIT vendor
+        shell: bash
+        run: |
+          set -euo pipefail
+
           ROOT=dist/luajit-vendor
+
           rm -rf "$ROOT"
           mkdir -p "$ROOT/host" "$ROOT/runtime"
+
+          test -f build/luajit/host/src/luajit
+          test -d build/luajit/host/src/jit
+          test -d android/app/src/main/cpp/vendor/luajit/include
+
           cp build/luajit/host/src/luajit "$ROOT/host/luajit-linux-x86_64"
           cp -a build/luajit/host/src/jit "$ROOT/host/jit"
           cp -a android/app/src/main/cpp/vendor/luajit/include "$ROOT/runtime/include"
+
           for ABI in arm64-v8a armeabi-v7a x86_64; do
+            test -f "android/app/src/main/cpp/vendor/luajit/$ABI/libluajit.a"
             mkdir -p "$ROOT/runtime/$ABI"
             cp "android/app/src/main/cpp/vendor/luajit/$ABI/libluajit.a" "$ROOT/runtime/$ABI/libluajit.a"
           done
+
+          test -f third_party/LuaJIT/COPYRIGHT
+          test -f third_party/LuaJIT/README
+
           cp third_party/LuaJIT/COPYRIGHT "$ROOT/COPYRIGHT"
           cp third_party/LuaJIT/README "$ROOT/README.upstream"
+
           cat > "$ROOT/PINNED_SOURCE.txt" <<'EOF'
           LuaJIT upstream: https://github.com/LuaJIT/LuaJIT
           Commit: 27f169c6c64175896d86e14f0d23c8d85c119c2c
           Full upstream source is pinned as third_party/LuaJIT. This artifact also contains the exact host bytecode compiler, JIT modules, public/internal headers, and static libraries used for every supported Android ABI.
           EOF
+
           chmod +x "$ROOT/host/luajit-linux-x86_64"
+
           find "$ROOT" -type f -print0 | sort -z | xargs -0 sha256sum > "$ROOT/SHA256SUMS.txt"
+
       - name: Compile Android release and libIrAutoX
-        run: gradle -p android --no-daemon :app:assembleRelease
-      - name: Zipalign 16K and verify APK
+        shell: bash
         run: |
           set -euo pipefail
+          gradle -p android --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Verify release APK exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$APK"
+          test -s "$APK"
+
+      - name: Zipalign 16K and verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
           BT="$ANDROID_HOME/build-tools/35.0.0"
           APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
           OUT=dist/validation/ClashOfDrayven-Android-v7.1.0-aligned-unsigned.apk
-          mkdir -p dist/validation dist/signing-tools/lib
+
+          mkdir -p dist/validation
+          mkdir -p dist/signing-tools/lib
+
           test -f "$APK"
+          test -x "$BT/zipalign"
+          test -x "$BT/apksigner"
+          test -f "$BT/lib/apksigner.jar"
+
           "$BT/zipalign" -P 16 -f 4 "$APK" "$OUT"
           "$BT/zipalign" -c -P 16 -v 4 "$OUT"
+
+          test -f "$OUT"
+
           for ABI in arm64-v8a armeabi-v7a x86_64; do
-            unzip -l "$OUT" | grep "lib/$ABI/libIrAutoX.so"
+            unzip -l "$OUT" | grep -F "lib/$ABI/libIrAutoX.so"
           done
+
           if unzip -l "$OUT" | grep -E '\.lua$|\.luac$'; then
             echo "Raw Lua/Lua bytecode file unexpectedly exposed in APK" >&2
             exit 1
           fi
+
           unzip -j "$OUT" 'lib/arm64-v8a/libIrAutoX.so' -d dist/validation
-          strings dist/validation/libIrAutoX.so | grep 'DrayvenEngine/1.0-LuaJIT-native'
+
+          test -f dist/validation/libIrAutoX.so
+
+          strings dist/validation/libIrAutoX.so | grep -F 'DrayvenEngine/1.0-LuaJIT-native'
+
           cp "$BT/apksigner" dist/signing-tools/apksigner
           cp "$BT/zipalign" dist/signing-tools/zipalign
           cp "$BT/lib/apksigner.jar" dist/signing-tools/lib/apksigner.jar
-          chmod +x dist/signing-tools/apksigner dist/signing-tools/zipalign
+
+          chmod +x dist/signing-tools/apksigner
+          chmod +x dist/signing-tools/zipalign
+
           sha256sum "$OUT" > dist/validation/SHA256-unsigned.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: android-irautox-v7-aligned
@@ -113,40 +205,58 @@ jobs:
 
   report:
     name: Record Android validation result
-    needs: [validate]
+    needs:
+      - validate
     if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 1
+
       - name: Write validation status
         shell: bash
+        env:
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+
           git config user.name "IrAutoX Build Bot"
           git config user.email "actions@users.noreply.github.com"
+
           for attempt in 1 2 3 4 5; do
-            git fetch origin main
+            git fetch --prune origin main
             git reset --hard origin/main
+
             cat > ANDROID_VALIDATION.md <<EOF
           # Android Validation
 
-          - Workflow run: ${GITHUB_RUN_ID}
-          - Source commit: ${GITHUB_SHA}
-          - Compile result: ${{ needs.validate.result }}
+          - Workflow run: ${RUN_ID}
+          - Source commit: ${SOURCE_COMMIT}
+          - Compile result: ${VALIDATION_RESULT}
           - Pipeline: pinned LuaJIT submodule + C++/NDK + R8 + 16K zipalign + libIrAutoX.so
-          - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Run URL: https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}
           EOF
+
             git add ANDROID_VALIDATION.md
+
             if git diff --cached --quiet; then
               exit 0
             fi
+
             git commit -m "Record Android LuaJIT validation [skip ci]"
+
             if git push origin HEAD:main; then
               exit 0
             fi
+
             sleep 2
           done
+
           echo "Could not publish Android validation status after retries" >&2
           exit 1
